@@ -1,11 +1,14 @@
 import { CMPItem } from '../types';
 import { parseISO, addMonths } from 'date-fns';
 
+// Generate mock data based on the provided example
 export const generateMockData = (): CMPItem[] => {
   const items: CMPItem[] = [];
   
+  // Sample profiles
   const profiles = ['ДВУТАВР35Ш2', '12+180', '14+130', '16+140', '20+160'];
   
+  // Sample names with realistic weights
   const baseItems = [
     { name: 'М1-19', weight: 2251 },
     { name: 'М1-6', weight: 1532 },
@@ -21,22 +24,25 @@ export const generateMockData = (): CMPItem[] => {
     { name: 'М3-14', weight: 780 },
   ];
 
+  // Generate data for multiple years and months
   const years = [2023, 2024, 2025];
   
   years.forEach(year => {
     for (let month = 0; month < 12; month++) {
-      const itemsPerMonth = 15 + Math.floor(Math.random() * 10); 
+      const itemsPerMonth = 15 + Math.floor(Math.random() * 10); // 15-25 items per month
       
       for (let i = 0; i < itemsPerMonth; i++) {
         const baseItem = baseItems[Math.floor(Math.random() * baseItems.length)];
         const profile = profiles[Math.floor(Math.random() * profiles.length)];
         
+        // Generate dates with realistic progression
         const baseDate = new Date(year, month, 1 + Math.floor(Math.random() * 28));
         const restrictions1Date = baseDate;
         const techRestrictionsDate = addMonths(baseDate, 1);
         const resourceRestrictionsDate = addMonths(baseDate, 2);
         const installationDate = addMonths(baseDate, 3);
 
+        // Add some variance to actual dates
         const getActualDate = (plannedDate: Date, variance: number = 14) => {
           const actualDate = new Date(plannedDate);
           actualDate.setDate(actualDate.getDate() + Math.floor(Math.random() * variance) - variance/2);

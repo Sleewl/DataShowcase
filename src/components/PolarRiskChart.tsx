@@ -26,7 +26,7 @@ const PolarRiskChart: React.FC<PolarRiskChartProps> = ({ installations }) => {
   };
 
   const radarData = installations.map(installation => ({
-    subject: `Установка ${installation.id}`,
+    subject: installation.name, // Используем оригинальное название установки
     score: calculateRiskScore(installation),
     collisions: installation.totalCollisions
   }));
@@ -54,7 +54,7 @@ const PolarRiskChart: React.FC<PolarRiskChartProps> = ({ installations }) => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+    <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
       <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
         Полярная карта рисков
       </h2>
@@ -87,13 +87,22 @@ const PolarRiskChart: React.FC<PolarRiskChartProps> = ({ installations }) => {
           </div>
         </div>
 
-        <div className="h-[400px]">
+        <div className="h-[450px]"> {/* Увеличена высота */}
           <ResponsiveContainer width="100%" height="100%">
-            <RadarChart data={radarData}>
+            <RadarChart 
+              data={radarData}
+              outerRadius="75%" // Уменьшен радиус диаграммы
+              margin={{ top: 30, right: 30, bottom: 30, left: 30 }} // Добавлены отступы
+            >
               <PolarGrid stroke="#e5e7eb" className="dark:stroke-gray-600" />
               <PolarAngleAxis 
                 dataKey="subject"
-                tick={{ fill: '#374151', className: 'dark:fill-gray-300' }}
+                tick={{
+                  fill: '#374151',
+                  className: 'dark:fill-gray-300 text-xs',
+                  dy: -8, // Вертикальное смещение меток
+                  fontSize: 14 // Размер шрифта
+                }}
               />
               <PolarRadiusAxis 
                 angle={90}

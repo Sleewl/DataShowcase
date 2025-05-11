@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart, TrendingUp, Award, Target, TrendingDown } from 'lucide-react';
+import { BarChart, TrendingUp, Award, Target } from 'lucide-react';
 import { StatusType } from '../types';
 
 interface MetricsPanelProps {
@@ -34,13 +34,16 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
   const { top3Marks, bottom3Marks, totalWeight, monthlyGrowth, planCompletion } = monthlyData;
 
   const getGrowthColor = (growth: number) => {
-    if (growth > 0) return 'text-green-500 dark:text-green-400';
-    if (growth === 0) return 'text-yellow-500 dark:text-yellow-400';
-    return 'text-red-500 dark:text-red-400';
+    if (growth > 0) return 'text-emerald-500 dark:text-emerald-400';
+    if (growth === 0) return 'text-amber-500 dark:text-amber-400';
+    return 'text-rose-500 dark:text-rose-400';
   };
 
   const getCompletionColor = (actual: number, planned: number) => {
-    return 'text-purple-500 dark:text-purple-400';
+    const ratio = actual / planned;
+    if (ratio >= 1) return 'text-emerald-500 dark:text-emerald-400';
+    if (ratio >= 0.8) return 'text-amber-500 dark:text-amber-400';
+    return 'text-rose-500 dark:text-rose-400';
   };
 
   const formatWeight = (weight: number) => {
@@ -52,23 +55,21 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
 
   const MetricCard = ({ 
     icon: Icon, 
-    iconColor, 
     title, 
     value, 
     valueColor, 
-    children 
+    children
   }: { 
-    icon: any, 
-    iconColor: string, 
-    title: string, 
-    value: string, 
-    valueColor: string, 
-    children?: React.ReactNode 
+    icon: any;
+    title: string;
+    value: string;
+    valueColor: string;
+    children?: React.ReactNode;
   }) => (
-    <div className="bg-gray-50 dark:bg-gray-700 p-6 rounded-lg">
+    <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg transition-all duration-200 hover:shadow-lg">
       <div className="flex items-start space-x-4">
-        <div className={`${iconColor} flex-shrink-0 mt-1`}>
-          <Icon className="h-7 w-7" />
+        <div className="flex-shrink-0 mt-1">
+          <Icon className="h-7 w-7 text-blue-500 dark:text-blue-400" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">{title}</p>
@@ -80,7 +81,7 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
   );
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+    <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6 metrics-panel">
       <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6 flex items-center">
         <BarChart className="h-5 w-5 text-blue-500 dark:text-blue-400 mr-2" />
         Отклонения: {statusLabel}
@@ -89,10 +90,9 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           icon={Award}
-          iconColor="text-yellow-500 dark:text-yellow-400"
           title="Лидирующие марки по объему"
           value={formatWeight(totalTop3Weight)}
-          valueColor="text-yellow-500 dark:text-yellow-400"
+          valueColor="text-blue-500 dark:text-blue-400"
         >
           <div className="space-y-2 mt-3">
             {top3Marks.map((mark, index) => (
@@ -100,28 +100,7 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
                 <span className="text-sm text-gray-600 dark:text-gray-300">
                   {index + 1}. {mark.name}
                 </span>
-                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {formatWeight(mark.weight)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </MetricCard>
-
-        <MetricCard
-          icon={TrendingDown}
-          iconColor="text-orange-500 dark:text-orange-400"
-          title="Минимальные марки по объему"
-          value={formatWeight(totalBottom3Weight)}
-          valueColor="text-orange-500 dark:text-orange-400"
-        >
-          <div className="space-y-2 mt-3">
-            {bottom3Marks.map((mark, index) => (
-              <div key={mark.name} className="flex justify-between items-center">
-                <span className="text-sm text-gray-600 dark:text-gray-300">
-                  {index + 1}. {mark.name}
-                </span>
-                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
                   {formatWeight(mark.weight)}
                 </span>
               </div>
@@ -131,7 +110,26 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
 
         <MetricCard
           icon={TrendingUp}
-          iconColor={getGrowthColor(monthlyGrowth)}
+          title="Минимальные марки по объему"
+          value={formatWeight(totalBottom3Weight)}
+          valueColor="text-blue-500 dark:text-blue-400"
+        >
+          <div className="space-y-2 mt-3">
+            {bottom3Marks.map((mark, index) => (
+              <div key={mark.name} className="flex justify-between items-center">
+                <span className="text-sm text-gray-600 dark:text-gray-300">
+                  {index + 1}. {mark.name}
+                </span>
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                  {formatWeight(mark.weight)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </MetricCard>
+
+        <MetricCard
+          icon={TrendingUp}
           title="Изменение объема к прошлому месяцу"
           value={`${monthlyGrowth > 0 ? '+' : ''}${formatWeight(monthlyGrowth)}`}
           valueColor={getGrowthColor(monthlyGrowth)}
@@ -145,16 +143,15 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
 
         <MetricCard
           icon={Target}
-          iconColor="text-purple-500 dark:text-purple-400"
           title="Прогресс выполнения месячного плана"
           value={`${formatWeight(planCompletion.actual)} из ${formatWeight(planCompletion.planned)}`}
-          valueColor="text-purple-500 dark:text-purple-400"
+          valueColor={getCompletionColor(planCompletion.actual, planCompletion.planned)}
         >
           <div className="mt-2">
             <p className="text-sm text-gray-600 dark:text-gray-300">
               {planCompletion.actual >= planCompletion.planned 
-                ? <>Перевыполнение: <span className="font-bold">+{formatWeight(planCompletion.difference)}</span></>
-                : <>До плана: <span className="font-bold">{formatWeight(Math.abs(planCompletion.difference))}</span></>}
+                ? <>Перевыполнение: <span className="font-bold text-emerald-500 dark:text-emerald-400">+{formatWeight(planCompletion.difference)}</span></>
+                : <>До плана: <span className="font-bold text-rose-500 dark:text-rose-400">{formatWeight(Math.abs(planCompletion.difference))}</span></>}
             </p>
           </div>
         </MetricCard>

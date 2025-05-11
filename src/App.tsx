@@ -16,6 +16,8 @@ import { useAuth } from './hooks/useAuth';
 import { usePlanFactStatus, useInstallationData } from './hooks/useData';
 import { exportToPDF, exportToExcel } from './utils/exportUtils';
 import { dynamicsData } from './data/dynamicsData';
+import CollisionGrowthGauge from './components/CollisionGrowthGauge';
+import TotalCollisionsCounter from './components/TotalCollisionsCounter';
 import { 
   filterData, 
   calculateMonthlyWeightData,
@@ -86,21 +88,27 @@ function App() {
     'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
   ];
 
+  const calculateYearlyCollisions = (installations: Installation[], year: number) => {
+    return installations.reduce((total, installation) => {
+      return total + installation.totalCollisions;
+    }, 0);
+  };
+
   const handleExportPDF = () => {
     let exportData;
     let title;
 
     if (dashboardView === 'status') {
       exportData = filteredData;
-      title = ` ${selectedStatusLabel} - ${format(currentMonth, '')}`;
+      title = 'Отчет по план-факт-статус';
       exportToPDF(exportData, title, dashboardView, statusRole);
     } else if (dashboardView === 'installations') {
       exportData = installationData;
-      title = '';
+      title = 'Отчет по коллизиям установок';
       exportToPDF(exportData, title, dashboardView, installationRole);
     } else if (dashboardView === 'dynamics') {
       exportData = dynamicsData;
-      title = '';
+      title = 'Отчет по динамике коллизий';
       exportToPDF(exportData, title, dashboardView, statusRole);
     }
   };
@@ -110,8 +118,9 @@ function App() {
     let title;
 
     if (dashboardView === 'status') {
-      exportData = filteredData;
-      title = `Отчет по статусу ${selectedStatusLabel} - ${format(currentMonth, 'MMMM yyyy')}`;
+      // Take only first 100 items for Excel export to prevent performance issues
+      exportData = filteredData.slice(0, 100);
+      title = 'План-факт статус';
       exportToExcel(exportData, title, dashboardView, statusRole);
     } else if (dashboardView === 'installations') {
       exportData = installationData;
@@ -119,8 +128,15 @@ function App() {
       exportToExcel(exportData, title, dashboardView, installationRole);
     } else if (dashboardView === 'dynamics') {
       exportData = dynamicsData;
-      title = 'Отчет по динамике коллизий';
+      title = 'Динамика коллизий';
       exportToExcel(exportData, title, dashboardView, statusRole);
+    }
+  };
+
+  const handleDashboardViewChange = (view: DashboardView) => {
+    setDashboardView(view);
+    if (view === 'installations' && installationData && installationData.length > 0) {
+      setSelectedInstallationId(installationData[0].id);
     }
   };
 
@@ -183,7 +199,7 @@ function App() {
         <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 mb-6">
           <div className="flex space-x-4">
             <button
-              onClick={() => setDashboardView('status')}
+              onClick={() => handleDashboardViewChange('status')}
               className={`px-4 py-2 rounded-md ${
                 dashboardView === 'status'
                   ? 'bg-blue-600 text-white'
@@ -193,17 +209,17 @@ function App() {
               План-факт-статус
             </button>
             <button
-              onClick={() => setDashboardView('installations')}
+              onClick={() => handleDashboardViewChange('installations')}
               className={`px-4 py-2 rounded-md ${
                 dashboardView === 'installations'
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
             >
-              Установки
+              Коллизии по установкам
             </button>
             <button
-              onClick={() => setDashboardView('dynamics')}
+              onClick={() => handleDashboardViewChange('dynamics')}
               className={`px-4 py-2 rounded-md ${
                 dashboardView === 'dynamics'
                   ? 'bg-blue-600 text-white'
@@ -384,6 +400,17 @@ function App() {
 
         {dashboardView === 'installations' && (
           <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <CollisionGrowthGauge
+                currentYearCollisions={calculateYearlyCollisions(installationData || [], 2025)}
+                previousYearCollisions={calculateYearlyCollisions(installationData || [], 2024)}
+              />
+              <TotalCollisionsCounter
+                currentYearCollisions={calculateYearlyCollisions(installationData || [], 2025)}
+                previousYearCollisions={calculateYearlyCollisions(installationData || [], 2024)}
+              />
+            </div>
+
             {(installationRole === 'executive' || installationRole === 'technical') && (
               <>
                 <PolarRiskChart installations={installationData} />

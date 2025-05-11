@@ -1,10 +1,12 @@
 import { CMPItem, StatusType, DataPoint, MonthlyWeightData, YearlyWeightData, StatusDateData, PlanFactStatusData, InstallationDBData } from '../types';
 import { format, parseISO, isValid, addDays, isBefore, isAfter, isSameMonth, isSameYear, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 
+// Get all unique dates from the dataset
 export const getUniqueDates = (data: PlanFactStatusData[]): string[] => {
   const datesSet = new Set<string>();
   
   data.forEach(item => {
+    // Add planned dates
     if (item.planned_dates) {
       Object.values(item.planned_dates).forEach(date => {
         if (date && isValid(parseISO(date))) {
@@ -13,6 +15,7 @@ export const getUniqueDates = (data: PlanFactStatusData[]): string[] => {
       });
     }
     
+    // Add actual dates
     if (item.actual_dates) {
       Object.values(item.actual_dates).forEach(date => {
         if (date && isValid(parseISO(date))) {
@@ -22,9 +25,11 @@ export const getUniqueDates = (data: PlanFactStatusData[]): string[] => {
     }
   });
   
+  // Sort dates
   return Array.from(datesSet).sort();
 };
 
+// Calculate cumulative status counts for each date
 export const calculateCumulativeData = (
   data: PlanFactStatusData[],
   statusType: StatusType,
@@ -40,11 +45,13 @@ export const calculateCumulativeData = (
   while (isBefore(currentDate, endDate) || currentDate.getTime() === endDate.getTime()) {
     const dateStr = format(currentDate, 'yyyy-MM-dd');
     
+    // Count planned items completed by this date
     const plannedCount = data.filter(item => {
       const plannedDate = item.planned_dates?.[statusType];
       return plannedDate && isBefore(parseISO(plannedDate), addDays(currentDate, 1));
     }).length;
     
+    // Count actual items completed by this date
     const actualCount = data.filter(item => {
       const actualDate = item.actual_dates?.[statusType];
       return actualDate && isBefore(parseISO(actualDate), addDays(currentDate, 1));
@@ -67,6 +74,7 @@ export const calculateCumulativeData = (
   return result;
 };
 
+// Calculate cumulative volume (weight) for each date
 export const calculateCumulativeVolume = (
   data: PlanFactStatusData[],
   statusType: StatusType,
@@ -82,6 +90,7 @@ export const calculateCumulativeVolume = (
   while (isBefore(currentDate, endDate) || currentDate.getTime() === endDate.getTime()) {
     const dateStr = format(currentDate, 'yyyy-MM-dd');
     
+    // Sum weights of planned items completed by this date
     const plannedVolume = data.reduce((sum, item) => {
       const plannedDate = item.planned_dates?.[statusType];
       if (plannedDate && isBefore(parseISO(plannedDate), addDays(currentDate, 1))) {
@@ -90,6 +99,7 @@ export const calculateCumulativeVolume = (
       return sum;
     }, 0);
     
+    // Sum weights of actual items completed by this date
     const actualVolume = data.reduce((sum, item) => {
       const actualDate = item.actual_dates?.[statusType];
       if (actualDate && isBefore(parseISO(actualDate), addDays(currentDate, 1))) {
@@ -115,6 +125,7 @@ export const calculateCumulativeVolume = (
   return result;
 };
 
+// Calculate completion percentage
 export const calculateCompletionPercentage = (data: PlanFactStatusData[], statusType: StatusType): number => {
   const totalItems = data.length;
   if (totalItems === 0) return 0;
@@ -123,6 +134,7 @@ export const calculateCompletionPercentage = (data: PlanFactStatusData[], status
   return (completedItems / totalItems) * 100;
 };
 
+// Calculate average delay in days
 export const calculateAverageDelay = (data: PlanFactStatusData[], statusType: StatusType): number => {
   const itemsWithBothDates = data.filter(
     item => item.planned_dates?.[statusType] && item.actual_dates?.[statusType]
@@ -134,6 +146,7 @@ export const calculateAverageDelay = (data: PlanFactStatusData[], statusType: St
     const plannedDate = parseISO(item.planned_dates![statusType]);
     const actualDate = parseISO(item.actual_dates![statusType]!);
     
+    // Calculate difference in days
     const diffTime = actualDate.getTime() - plannedDate.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
@@ -143,6 +156,7 @@ export const calculateAverageDelay = (data: PlanFactStatusData[], statusType: St
   return totalDelayDays / itemsWithBothDates.length;
 };
 
+// Filter data based on criteria
 export const filterData = (
   data: PlanFactStatusData[],
   searchTerm: string,
@@ -155,6 +169,7 @@ export const filterData = (
       item.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.profile.toLowerCase().includes(searchTerm.toLowerCase());
     
+    // Filter by date range if provided
     let withinDateRange = true;
     if (dateRange[0] && dateRange[1]) {
       const hasDateInRange = (item.planned_dates ? Object.values(item.planned_dates) : []).some(date => {
@@ -182,6 +197,7 @@ export const filterData = (
   });
 };
 
+// Format date for display
 export const formatDateForDisplay = (dateStr: string | null): string => {
   if (!dateStr) return 'Н/Д';
   try {
@@ -192,6 +208,7 @@ export const formatDateForDisplay = (dateStr: string | null): string => {
   }
 };
 
+// Calculate monthly weight data
 export const calculateMonthlyWeightData = (data: PlanFactStatusData[], selectedMonth: Date): MonthlyWeightData[] => {
   const monthData = new Map<string, number>();
 
@@ -217,6 +234,7 @@ export const calculateMonthlyWeightData = (data: PlanFactStatusData[], selectedM
     .sort((a, b) => b.weight - a.weight);
 };
 
+// Calculate yearly weight data
 export const calculateYearlyWeightData = (data: PlanFactStatusData[], selectedYear: number): YearlyWeightData[] => {
   const monthlyData = new Array(12).fill(0).map((_, index) => ({
     month: format(new Date(selectedYear, index), 'MMMM'),
@@ -240,6 +258,7 @@ export const calculateYearlyWeightData = (data: PlanFactStatusData[], selectedYe
   return monthlyData;
 };
 
+// Calculate status date data
 export const calculateStatusDateData = (data: PlanFactStatusData[], status: StatusType): StatusDateData[] => {
   return data.map(item => ({
     name: item.name,
@@ -253,6 +272,7 @@ export const calculateStatusDateData = (data: PlanFactStatusData[], status: Stat
   });
 };
 
+// Calculate quarterly volume data
 export const calculateQuarterlyVolumeData = (data: PlanFactStatusData[], year: number) => {
   const profileData = new Map<string, { planned: number, actual: number }>();
   
@@ -287,6 +307,7 @@ export const calculateQuarterlyVolumeData = (data: PlanFactStatusData[], year: n
     .sort((a, b) => b.planned - a.planned);
 };
 
+// Calculate monthly metrics
 export const calculateMonthlyMetrics = (
   data: PlanFactStatusData[],
   selectedMonth: Date
@@ -301,6 +322,7 @@ export const calculateMonthlyMetrics = (
     difference: number;
   };
 } => {
+  // Get current month's data
   const currentMonthData = data.filter(item => {
     if (!item.planned_dates?.installation) return false;
     try {
@@ -312,6 +334,7 @@ export const calculateMonthlyMetrics = (
     }
   });
 
+  // Get previous month's data
   const previousMonthData = data.filter(item => {
     if (!item.planned_dates?.installation) return false;
     try {
@@ -323,11 +346,14 @@ export const calculateMonthlyMetrics = (
     }
   });
 
+  // Calculate total weights
   const currentMonthWeight = currentMonthData.reduce((sum, item) => sum + item.weight, 0);
   const previousMonthWeight = previousMonthData.reduce((sum, item) => sum + item.weight, 0);
 
+  // Calculate absolute monthly growth in weight
   const monthlyGrowth = currentMonthWeight - previousMonthWeight;
 
+  // Calculate top-3 and bottom-3 marks
   const markWeights = new Map<string, number>();
   currentMonthData.forEach(item => {
     const current = markWeights.get(item.name) || 0;
@@ -354,6 +380,7 @@ export const calculateMonthlyMetrics = (
       percentage: (weight / currentMonthWeight) * 100
     }));
 
+  // Calculate plan completion in absolute values
   const plannedWeight = currentMonthData.reduce((sum, item) => sum + item.weight, 0);
   const actualWeight = currentMonthData.reduce((sum, item) => {
     if (item.actual_dates?.installation) {

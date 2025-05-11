@@ -7,17 +7,21 @@ interface Credentials {
   password: string;
 }
 
-const ENCRYPTION_KEY = '';
+// Encryption key - in production this should be in environment variables
+const ENCRYPTION_KEY = 'your-secret-key-2024';
 
+// Encrypt the passwords
 const encryptPassword = (password: string): string => {
   return CryptoJS.AES.encrypt(password, ENCRYPTION_KEY).toString();
 };
 
+// Decrypt the passwords
 const decryptPassword = (encryptedPassword: string): string => {
   const bytes = CryptoJS.AES.decrypt(encryptedPassword, ENCRYPTION_KEY);
   return bytes.toString(CryptoJS.enc.Utf8);
 };
 
+// Encrypted passwords
 const USERS: Record<string, { password: string; role: UserRole }> = {
   'Executor': { 
     password: encryptPassword('Executor'), 

@@ -15,6 +15,7 @@ const DynamicsTable: React.FC<DynamicsTableProps> = ({ data }) => {
   const [page, setPage] = useState(1);
   const itemsPerPage = 10;
   
+  // Handle sort
   const handleSort = (field: SortField) => {
     if (field === sortField) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -24,6 +25,7 @@ const DynamicsTable: React.FC<DynamicsTableProps> = ({ data }) => {
     }
   };
   
+  // Sort data
   const sortedData = [...data].sort((a, b) => {
     const multiplier = sortDirection === 'asc' ? 1 : -1;
     
@@ -45,12 +47,14 @@ const DynamicsTable: React.FC<DynamicsTableProps> = ({ data }) => {
     }
   });
   
+  // Paginate data
   const totalPages = Math.ceil(sortedData.length / itemsPerPage);
   const paginatedData = sortedData.slice(
     (page - 1) * itemsPerPage,
     page * itemsPerPage
   );
   
+  // Render sort icon
   const renderSortIcon = (field: SortField) => {
     if (field !== sortField) {
       return <ArrowUpDown className="h-4 w-4 ml-1" />;

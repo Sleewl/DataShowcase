@@ -7,6 +7,7 @@ import { installationsData } from '../data/installationsData';
 import { PlanFactStatusData } from '../types';
 
 export async function fetchPlanFactStatus() {
+  // Transform mock data to match the expected PlanFactStatusData structure
   return mockData.map(item => ({
     name: item.name,
     profile: item.profile,
@@ -27,5 +28,7 @@ export async function fetchPlanFactStatus() {
 }
 
 export async function fetchInstallationData(installationNumber: number) {
+  // Return all installations when requesting any installation
+  // This ensures we have data for the pie chart and other components
   return installationsData;
 }

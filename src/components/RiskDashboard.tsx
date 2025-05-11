@@ -6,6 +6,7 @@ interface RiskDashboardProps {
 }
 
 const RiskDashboard: React.FC<RiskDashboardProps> = ({ installations }) => {
+  // Calculate risk levels based on collision data
   const calculateRiskLevel = (installation: Installation) => {
     const collisionRate = installation.totalCollisions / installation.data.length;
     const duOver40Percentage = (installation.totalDuOver40 / installation.totalCollisions) * 100;

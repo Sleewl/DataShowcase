@@ -12,10 +12,12 @@ app.use(cors({
 
 app.use(express.json());
 
+// Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Get plan-fact-status data
 app.get('/api/plan-fact-status', async (req, res) => {
   try {
     const result = await query(`
@@ -34,6 +36,7 @@ app.get('/api/plan-fact-status', async (req, res) => {
       FROM plan_fact_status_st951
     `);
 
+    // Transform the flat data structure into nested objects
     const transformedData = result.map(row => ({
       name: row.name,
       profile: row.profile,
@@ -59,6 +62,7 @@ app.get('/api/plan-fact-status', async (req, res) => {
   }
 });
 
+// Get installation data by number
 app.get('/api/installation/:number', async (req, res) => {
   try {
     const { number } = req.params;
@@ -84,6 +88,7 @@ app.get('/api/installation/:number', async (req, res) => {
       duUnder40: parseInt(row.du_under_40)
     }));
 
+    // Calculate totals
     const totalCollisions = transformedData.reduce((sum, item) => sum + item.collisionCount, 0);
     const totalDuOver40 = transformedData.reduce((sum, item) => sum + item.duOver40, 0);
     const totalDuUnder40 = transformedData.reduce((sum, item) => sum + item.duUnder40, 0);

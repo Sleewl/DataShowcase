@@ -26,6 +26,7 @@ const SCurveChart: React.FC<SCurveChartProps> = ({
   dataMode,
   title
 }) => {
+  // Format the date for display in the tooltip and axis
   const formatDate = (dateStr: string) => {
     try {
       return format(parseISO(dateStr), 'dd.MM.yyyy');
@@ -42,9 +43,11 @@ const SCurveChart: React.FC<SCurveChartProps> = ({
     return value;
   };
   
+  // Determine which lines to show based on the data mode
   const showPlanned = dataMode === 'planned' || dataMode === 'comparison';
   const showActual = dataMode === 'actual' || dataMode === 'comparison';
   
+  // Find today's date for reference line
   const today = format(new Date(), 'yyyy-MM-dd');
   
   return (

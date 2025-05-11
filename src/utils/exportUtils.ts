@@ -1,9 +1,122 @@
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import { utils, writeFile } from 'xlsx';
 import html2canvas from 'html2canvas';
-import { PlanFactStatusData, Installation, CollisionDynamicsData, DashboardView, StatusRole, InstallationRole } from '../types';
-import { formatDateForDisplay } from './dataProcessing';
+import { utils, writeFile as writeXLSX } from 'xlsx';
+
+import {
+  PlanFactStatusData,
+  Installation,
+  CollisionDynamicsData,
+  DashboardView,
+  StatusRole,
+  InstallationRole
+} from '../types';
+
+const PDF_CONFIG = {
+  page: {
+    width: 297,
+    height: 210,
+    margins: { left: 15, right: 15, top: 20, bottom: 20 }
+  },
+  title: {
+    fontSize: 22,
+    verticalOffset: 10
+  },
+  spacing: 15
+};
+
+async function renderRussianText(text: string, fontSize: number) {
+  const div = document.createElement('div');
+  Object.assign(div.style, {
+    position: 'absolute', left: '-9999px',
+    fontFamily: 'PT Sans, Arial', fontSize: `${fontSize}px`,
+    whiteSpace: 'nowrap', backgroundColor: '#ffffff',
+    padding: '6px 10px', lineHeight: '1.7', boxSizing: 'content-box'
+  });
+  div.textContent = text;
+  document.body.appendChild(div);
+
+  const canvas = await html2canvas(div, {
+    scale: 2,
+    logging: false,
+    backgroundColor: '#ffffff'
+  });
+  document.body.removeChild(div);
+
+  return {
+    data: canvas.toDataURL('image/png'),
+    width: canvas.width * 0.264583,
+    height: canvas.height * 0.264583
+  };
+}
+
+async function captureElement(el: HTMLElement): Promise<string> {
+  const canvas = await html2canvas(el, {
+    scale: 2,
+    logging: false,
+    useCORS: true,
+    backgroundColor: '#ffffff',
+    onclone: cloned => {
+      cloned.documentElement.style.fontFamily = 'PT Sans, Arial';
+      cloned.body.style.visibility = 'visible';
+    }
+  });
+  return canvas.toDataURL('image/png');
+}
+
+function addImageWithPageBreak(
+  doc: jsPDF,
+  imgData: string,
+  cursorY: number,
+  maxWidth: number
+): number {
+  const props = doc.getImageProperties(imgData);
+  let w = maxWidth * 0.8;
+  let h = (props.height * w) / props.width;
+  const bottom = PDF_CONFIG.page.height - PDF_CONFIG.page.margins.bottom;
+
+  if (cursorY + h > bottom) {
+    const avail = bottom - cursorY;
+    if (avail > 20) {
+      const scale = avail / h;
+      w *= scale;
+      h *= scale;
+    } else {
+      doc.addPage();
+      cursorY = PDF_CONFIG.page.margins.top;
+    }
+  }
+  if (cursorY + h > bottom) {
+    doc.addPage();
+    cursorY = PDF_CONFIG.page.margins.top;
+  }
+  const x = (PDF_CONFIG.page.width - w) / 2;
+  doc.addImage(imgData, 'PNG', x, cursorY, w, h);
+  return cursorY + h + PDF_CONFIG.spacing;
+}
+
+async function svgToPngDataUrl(svg: SVGElement): Promise<string> {
+  if (!svg.getAttribute('xmlns')) {
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  }
+  const xml = new XMLSerializer().serializeToString(svg);
+  const base64 = btoa(unescape(encodeURIComponent(xml)));
+  const imgSrc = `data:image/svg+xml;base64,${base64}`;
+
+  const img = new Image();
+  img.src = imgSrc;
+  await new Promise(res => (img.onload = res));
+
+  const width = svg.viewBox.baseVal.width || svg.clientWidth;
+  const height = svg.viewBox.baseVal.height || svg.clientHeight;
+  const canvas = document.createElement('canvas');
+  canvas.width = width * 2;
+  canvas.height = height * 2;
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(2, 2);
+  ctx.drawImage(img, 0, 0, width, height);
+  return canvas.toDataURL('image/png');
+}
 
 export const exportToPDF = async (
   data: PlanFactStatusData[] | Installation[] | CollisionDynamicsData[],
@@ -11,48 +124,45 @@ export const exportToPDF = async (
   view: DashboardView,
   role: StatusRole | InstallationRole
 ): Promise<void> => {
-  const doc = new jsPDF();
-  doc.setFontSize(16);
-  doc.text(title, 14, 22);
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
 
-  const charts = document.querySelectorAll('.recharts-wrapper');
-  let currentY = 30;
+  const titleImg = await renderRussianText(title, PDF_CONFIG.title.fontSize);
+  const titleX = (PDF_CONFIG.page.width - titleImg.width) / 2;
+  const titleY = PDF_CONFIG.title.verticalOffset;
+  doc.addImage(titleImg.data, 'PNG', titleX, titleY, titleImg.width, titleImg.height);
 
-  for (const chart of charts) {
-    try {
-      const canvas = await html2canvas(chart as HTMLElement, {
-        scale: 2,
-        logging: false,
-        useCORS: true,
-        backgroundColor: null
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const imgWidth = 180;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      // Add new page if chart won't fit
-      if (currentY + imgHeight > 280) {
-        doc.addPage();
-        currentY = 20;
-      }
-      
-      doc.addImage(imgData, 'PNG', 15, currentY, imgWidth, imgHeight);
-      currentY += imgHeight + 10;
-    } catch (error) {
-      console.error('Error capturing chart:', error);
+  let cursorY = titleY + titleImg.height + PDF_CONFIG.spacing;
+  const maxW = PDF_CONFIG.page.width - PDF_CONFIG.page.margins.left - PDF_CONFIG.page.margins.right;
+
+  if (view === 'installations') {
+    const polarEl = document.querySelector<HTMLElement>('.PolarRiskChart');
+    if (polarEl) {
+      const img = await captureElement(polarEl);
+      cursorY = addImageWithPageBreak(doc, img, cursorY, maxW);
     }
-  }
+    const metricsGrid = document.querySelector<HTMLElement>('.space-y-6 > .grid');
+    if (metricsGrid) {
+      const img = await captureElement(metricsGrid);
+      cursorY = addImageWithPageBreak(doc, img, cursorY, maxW);
+    }
 
-  doc.addPage();
-  currentY = 20;
-
-  if (view === 'status') {
-    exportPlanFactStatusToPDF(doc, data as PlanFactStatusData[], role as StatusRole);
-  } else if (view === 'installations') {
-    exportInstallationsToPDF(doc, data as Installation[], role as InstallationRole);
-  } else if (view === 'dynamics') {
-    exportDynamicsToPDF(doc, data as CollisionDynamicsData[], role as InstallationRole);
+    const charts = Array.from(document.querySelectorAll<HTMLElement>('.recharts-wrapper'));
+    const byPass = charts.slice(1);
+    for (const chart of byPass) {
+      const img = await captureElement(chart);
+      cursorY = addImageWithPageBreak(doc, img, cursorY, maxW);
+    }
+  } else {
+    const metricsPanel = document.querySelector<HTMLElement>('.metrics-panel');
+    if (metricsPanel) {
+      const img = await captureElement(metricsPanel);
+      cursorY = addImageWithPageBreak(doc, img, cursorY, maxW);
+    }
+    const charts = Array.from(document.querySelectorAll<HTMLElement>('.recharts-wrapper'));
+    for (const chart of charts) {
+      const img = await captureElement(chart);
+      cursorY = addImageWithPageBreak(doc, img, cursorY, maxW);
+    }
   }
 
   doc.save(`${title.replace(/\s+/g, '_')}.pdf`);
@@ -67,360 +177,83 @@ export const exportToExcel = (
   const wb = utils.book_new();
 
   if (view === 'status') {
-    exportPlanFactStatusToExcel(wb, data as PlanFactStatusData[], role as StatusRole);
-  } else if (view === 'installations') {
-    exportInstallationsToExcel(wb, data as Installation[], role as InstallationRole);
-  } else if (view === 'dynamics') {
-    exportDynamicsToExcel(wb, data as CollisionDynamicsData[], role as InstallationRole);
-  }
-
-  writeFile(wb, `${title.replace(/\s+/g, '_')}.xlsx`);
-};
-
-const exportPlanFactStatusToPDF = (doc: jsPDF, data: PlanFactStatusData[], role: StatusRole) => {
-  if (role === 'operator' || role === 'manager' || role === 'technical') {
-    const tableColumn = [
-      'Отправочная', 
-      'Профиль', 
-      'Вес (кг)', 
-      'План: Огр. предпр.', 
-      'План: Тех. огр.', 
-      'План: Рес. огр.', 
-      'План: Монтаж', 
-      'Факт: Огр. предпр.', 
-      'Факт: Тех. огр.', 
-      'Факт: Рес. огр.', 
-      'Факт: Монтаж'
-    ];
-
-    const tableRows = data.map(item => [
-      item.name,
-      item.profile,
-      item.weight.toString(),
-      formatDateForDisplay(item.planned_dates.restrictions1),
-      formatDateForDisplay(item.planned_dates.techRestrictions),
-      formatDateForDisplay(item.planned_dates.resourceRestrictions),
-      formatDateForDisplay(item.planned_dates.installation),
-      formatDateForDisplay(item.actual_dates.restrictions1),
-      formatDateForDisplay(item.actual_dates.techRestrictions),
-      formatDateForDisplay(item.actual_dates.resourceRestrictions),
-      formatDateForDisplay(item.actual_dates.installation)
-    ]);
-
-    doc.autoTable({
-      head: [tableColumn],
-      body: tableRows,
-      startY: 30,
-      theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 1 },
-      columnStyles: {
-        0: { cellWidth: 25 },
-        1: { cellWidth: 20 },
-        2: { cellWidth: 15 }
-      },
-      headStyles: {
-        fillColor: [59, 130, 246],
-        textColor: 255,
-        fontSize: 8,
-        fontStyle: 'bold'
-      },
-      alternateRowStyles: {
-        fillColor: [245, 247, 250]
-      }
-    });
-  }
-};
-
-const exportInstallationsToPDF = (doc: jsPDF, data: Installation[], role: InstallationRole) => {
-  if (role === 'technical' || role === 'executive') {
-    const tableColumn = [
-      'Установка',
-      'Всего коллизий',
-      'ДУ > 40 мм',
-      'ДУ ≤ 40 мм',
-      'Версия',
-      'Дата'
-    ];
-
-    const tableRows = data.map(item => [
-      item.name,
-      item.totalCollisions.toString(),
-      item.totalDuOver40.toString(),
-      item.totalDuUnder40.toString(),
-      item.version,
-      item.date
-    ]);
-
-    // @ts-ignore
-    doc.autoTable({
-      head: [tableColumn],
-      body: tableRows,
-      startY: 30,
-      theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 1 },
-      headStyles: {
-        fillColor: [59, 130, 246],
-        textColor: 255,
-        fontSize: 8,
-        fontStyle: 'bold'
-      }
-    });
-  }
-
-  if (role === 'technical' || role === 'executor') {
-    data.forEach((installation, index) => {
-      if (index > 0) doc.addPage();
-
-      doc.text(`${installation.name} - Детализация`, 14, doc.autoTable.previous.finalY + 10);
-
-      const detailsColumn = [
-        'Секция',
-        'Дисциплина 1',
-        'Дисциплина 2',
-        'Кол-во коллизий',
-        'ДУ > 40',
-        'ДУ ≤ 40'
-      ];
-
-      const detailsRows = installation.data.map(item => [
-        item.section,
-        item.discipline1,
-        item.discipline2,
-        item.collisionCount.toString(),
-        item.duOver40.toString(),
-        item.duUnder40.toString()
-      ]);
-
-      // @ts-ignore
-      doc.autoTable({
-        head: [detailsColumn],
-        body: detailsRows,
-        startY: doc.autoTable.previous.finalY + 15,
-        theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 1 },
-        headStyles: {
-          fillColor: [59, 130, 246],
-          textColor: 255,
-          fontSize: 8,
-          fontStyle: 'bold'
-        }
-      });
-    });
-  }
-};
-
-const exportDynamicsToPDF = (doc: jsPDF, data: CollisionDynamicsData[], role: InstallationRole) => {
-  if (role === 'technical' || role === 'executive') {
-    const tableColumn = [
-      'Месяц',
-      'Всего',
-      'Уст. 1',
-      'Уст. 2',
-      'Уст. 3',
-      'Уст. 4',
-      'Уст. 5'
-    ];
-
-    const tableRows = data.map(item => [
-      item.month,
-      item.total.toString(),
-      item.installations['1'].toString(),
-      item.installations['2'].toString(),
-      item.installations['3'].toString(),
-      item.installations['4'].toString(),
-      item.installations['5'].toString()
-    ]);
-
-    // @ts-ignore
-    doc.autoTable({
-      head: [tableColumn],
-      body: tableRows,
-      startY: 30,
-      theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 1 },
-      headStyles: {
-        fillColor: [59, 130, 246],
-        textColor: 255,
-        fontSize: 8,
-        fontStyle: 'bold'
-      }
-    });
-  }
-
-  if (role === 'technical' || role === 'executor') {
-    if (doc.autoTable.previous) doc.addPage();
-
-    const diameterColumn = [
-      'Месяц',
-      'Всего',
-      '> 40 мм',
-      '20-40 мм',
-      '< 20 мм',
-      'Не опр.'
-    ];
-
-    const diameterRows = data.map(item => [
-      item.month,
-      item.total.toString(),
-      item.diameters.over40.toString(),
-      item.diameters.between20and40.toString(),
-      item.diameters.under20.toString(),
-      item.diameters.undefined.toString()
-    ]);
-
-    // @ts-ignore
-    doc.autoTable({
-      head: [diameterColumn],
-      body: diameterRows,
-      startY: doc.autoTable.previous ? doc.autoTable.previous.finalY + 15 : 30,
-      theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 1 },
-      headStyles: {
-        fillColor: [59, 130, 246],
-        textColor: 255,
-        fontSize: 8,
-        fontStyle: 'bold'
-      }
-    });
-  }
-};
-
-const exportPlanFactStatusToExcel = (wb: any, data: PlanFactStatusData[], role: StatusRole) => {
-  if (role === 'operator' || role === 'manager' || role === 'technical') {
     const wsData = [
       [
-        'Отправочная', 
-        'Профиль', 
-        'Вес (кг)', 
-        'План: Огр. предпр.', 
-        'План: Тех. огр.', 
-        'План: Рес. огр.', 
-        'План: Монтаж', 
-        'Факт: Огр. предпр.', 
-        'Факт: Тех. огр.', 
-        'Факт: Рес. огр.', 
+        'Отправочная марка',
+        'Профиль',
+        'Вес (кг)',
+        'План: Огр. предпр.',
+        'План: Тех. огр.',
+        'План: Рес. огр.',
+        'План: Монтаж',
+        'Факт: Огр. предпр.',
+        'Факт: Тех. огр.',
+        'Факт: Рес. огр.',
         'Факт: Монтаж'
       ],
-      ...data.map(item => [
+      ...(data as PlanFactStatusData[]).map(item => [
         item.name,
         item.profile,
         item.weight,
-        formatDateForDisplay(item.planned_dates.restrictions1),
-        formatDateForDisplay(item.planned_dates.techRestrictions),
-        formatDateForDisplay(item.planned_dates.resourceRestrictions),
-        formatDateForDisplay(item.planned_dates.installation),
-        formatDateForDisplay(item.actual_dates.restrictions1),
-        formatDateForDisplay(item.actual_dates.techRestrictions),
-        formatDateForDisplay(item.actual_dates.resourceRestrictions),
-        formatDateForDisplay(item.actual_dates.installation)
+        item.planned_dates.restrictions1,
+        item.planned_dates.techRestrictions,
+        item.planned_dates.resourceRestrictions,
+        item.planned_dates.installation,
+        item.actual_dates.restrictions1,
+        item.actual_dates.techRestrictions,
+        item.actual_dates.resourceRestrictions,
+        item.actual_dates.installation
       ])
     ];
-
     const ws = utils.aoa_to_sheet(wsData);
     utils.book_append_sheet(wb, ws, 'План-факт-статус');
-  }
-};
 
-const exportInstallationsToExcel = (wb: any, data: Installation[], role: InstallationRole) => {
-  if (role === 'technical' || role === 'executive') {
+  } else if (view === 'installations') {
+    const installations = data as Installation[];
     const summaryData = [
-      [
-        'Установка',
-        'Всего коллизий',
-        'ДУ > 40 мм',
-        'ДУ ≤ 40 мм',
-        'Версия',
-        'Дата'
-      ],
-      ...data.map(item => [
-        item.name,
-        item.totalCollisions,
-        item.totalDuOver40,
-        item.totalDuUnder40,
-        item.version,
-        item.date
+      ['Установка', 'Всего коллизий', 'ДУ > 40 мм', 'ДУ ≤ 40 мм'],
+      ...installations.map(i => [
+        i.name,
+        i.totalCollisions,
+        i.totalDuOver40,
+        i.totalDuUnder40
       ])
     ];
-
     const wsSummary = utils.aoa_to_sheet(summaryData);
     utils.book_append_sheet(wb, wsSummary, 'Сводка');
-  }
 
-  if (role === 'technical' || role === 'executor') {
-    data.forEach(installation => {
-      const detailsData = [
-        [
-          'Секция',
-          'Дисциплина 1',
-          'Дисциплина 2',
-          'Кол-во коллизий',
-          'ДУ > 40',
-          'ДУ ≤ 40'
-        ],
-        ...installation.data.map(item => [
-          item.section,
-          item.discipline1,
-          item.discipline2,
-          item.collisionCount,
-          item.duOver40,
-          item.duUnder40
+    installations.forEach(inst => {
+      const instData = [
+        ['Секция', 'Дисциплина 1', 'Дисциплина 2', 'Кол-во коллизий', 'ДУ > 40', 'ДУ ≤ 40'],
+        ...inst.data.map(row => [
+          row.section,
+          row.discipline1,
+          row.discipline2,
+          row.collisionCount,
+          row.duOver40,
+          row.duUnder40
         ])
       ];
-
-      const wsDetails = utils.aoa_to_sheet(detailsData);
-      utils.book_append_sheet(wb, wsDetails, installation.name);
+      const wsInst = utils.aoa_to_sheet(instData);
+      utils.book_append_sheet(wb, wsInst, inst.name);
     });
-  }
-};
 
-const exportDynamicsToExcel = (wb: any, data: CollisionDynamicsData[], role: InstallationRole) => {
-  if (role === 'technical' || role === 'executive') {
-    const installationsData = [
-      [
-        'Месяц',
-        'Всего',
-        'Уст. 1',
-        'Уст. 2',
-        'Уст. 3',
-        'Уст. 4',
-        'Уст. 5'
-      ],
-      ...data.map(item => [
-        item.month,
-        item.total,
-        item.installations['1'],
-        item.installations['2'],
-        item.installations['3'],
-        item.installations['4'],
-        item.installations['5']
-      ])
-    ];
-
-    const wsInstallations = utils.aoa_to_sheet(installationsData);
-    utils.book_append_sheet(wb, wsInstallations, 'По установкам');
-  }
-
-  if (role === 'technical' || role === 'executor') {
-    const diameterData = [
-      [
-        'Месяц',
-        'Всего',
-        '> 40 мм',
-        '20-40 мм',
-        '< 20 мм',
-        'Не опр.'
-      ],
-      ...data.map(item => [
+  } else if (view === 'dynamics') {
+    const dyn = data as CollisionDynamicsData[];
+    const wsData = [
+      ['Месяц', 'Всего', 'ДУ > 40 мм', 'ДУ ≤ 40 мм', 'Не определено'],
+      ...dyn.map(item => [
         item.month,
         item.total,
         item.diameters.over40,
-        item.diameters.between20and40,
-        item.diameters.under20,
+        item.diameters.between2and40,
         item.diameters.undefined
       ])
     ];
-
-    const wsDiameter = utils.aoa_to_sheet(diameterData);
-    utils.book_append_sheet(wb, wsDiameter, 'По диаметрам');
+    const ws = utils.aoa_to_sheet(wsData);
+    utils.book_append_sheet(wb, ws, 'Динамика');
   }
+
+  // ключевой вызов: writeXLSX
+  writeXLSX(wb, `${title.replace(/\s+/g, '_')}.xlsx`);
 };
